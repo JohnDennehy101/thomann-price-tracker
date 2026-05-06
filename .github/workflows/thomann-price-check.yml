@@ -28,7 +28,11 @@ jobs:
         run: uv sync --frozen
 
       - name: Add random jitter to avoid hitting site at same moment daily
-        run: sleep $((RANDOM % 600))
+        shell: bash
+        run: |
+          delay=$((RANDOM % 600))
+          echo "Applying random jitter: ${delay}s"
+          sleep "${delay}"
 
       - name: Run scraper
         run: uv run python -m src.scraper
