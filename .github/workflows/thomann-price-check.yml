@@ -27,6 +27,9 @@ jobs:
       - name: Sync dependencies
         run: uv sync --frozen
 
+      - name: Add random jitter to avoid hitting site at same moment daily
+        run: sleep $((RANDOM % 600))
+
       - name: Run scraper
         run: uv run python -m src.scraper
 
