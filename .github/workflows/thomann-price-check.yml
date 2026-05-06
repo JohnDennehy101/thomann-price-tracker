@@ -1,0 +1,86 @@
+name: Daily Thomann Price Check
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  check-price:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Add random jitter to avoid hitting site at same moment daily
+        run: sleep $((RANDOM % 600))
+
+      - name: Run scraper
+        run: uv run python -m src.scraper
+
+      - name: Create issue if changed
+        if: env.PRICE_CHANGED == 'true'
+        uses: actions/github-script@v7
+        env:
+          CHANGED_PRODUCTS_JSON: ${{ env.CHANGED_PRODUCTS_JSON }}
+        with:
+          script: |
+            const changes = JSON.parse(process.env.CHANGED_PRODUCTS_JSON || "[]");
+
+            if (!changes.length) {
+              core.info("PRICE_CHANGED=true but CHANGED_PRODUCTS_JSON is empty. Skipping.");
+              return;
+            }
+
+            const title = `Price changes detected (${changes.length} product${changes.length === 1 ? "" : "s"})`;
+
+            const lines = [
+              `Detected ${changes.length} price change(s):`,
+              "",
+              ...changes.map((c, i) => {
+                const diff = Number(c.diff);
+                const diffSign = diff >= 0 ? "+" : "";
+                const symbol = c.currency_symbol || "€";
+                return [
+                  `${i + 1}. ${c.product_name || c.key || "Unknown product"}`,
+                  `   - Key: ${c.key || "n/a"}`,
+                  `   - URL: ${c.url || "n/a"}`,
+                  `   - Previous: ${symbol}${Number(c.old_price).toFixed(2)}`,
+                  `   - Current: ${symbol}${Number(c.new_price).toFixed(2)}`,
+                  `   - Difference: ${diffSign}${diff.toFixed(2)}`
+                ].join("\n");
+              }),
+              "",
+              `Checked at: ${new Date().toISOString()}`
+            ];
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: lines.join("\n"),
+              labels: ["price-alert"]
+            });
+
+      - name: Commit latest price state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          git diff --cached --quiet || git commit -m "Update tracked price state"
+          git push

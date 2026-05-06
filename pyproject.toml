@@ -1,0 +1,21 @@
+[project]
+name = "thomann-price-tracker"
+version = "0.1.0"
+description = "Daily price checker for Thomann.de products via GitHub Actions"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests==2.33.1",
+    "beautifulsoup4==4.14.3",
+    "python-dotenv==1.2.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["src/tests"]
+
+[dependency-groups]
+dev = [
+  "pytest>=7.0.0",
+  "black>=23.0.0",
+]
